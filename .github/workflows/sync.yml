@@ -1,0 +1,46 @@
+name: Notion to Obsidian Auto-Sync
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'  # Runs every 3 hours
+  workflow_dispatch:        # Allows manual trigger anytime from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check Start Date Guard
+        run: |
+          # Get today's date in YYYY-MM-DD format
+          TODAY=$(date +%Y-%m-%d)
+          START_DATE="2026-09-07"
+          
+          if [[ "$TODAY" < "$START_DATE" ]]; then
+            echo "Today ($TODAY) is before the start date ($START_DATE). Skipping execution."
+            exit 0
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install requests python-dotenv
+
+      - name: Run Automation Script
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          OBSIDIAN_BASE_DIR: "."  # Saves directly into repository root in the cloud
+        run: python automation.py
+
+      - name: Commit and Push New Notes to Repo
+        run: |
+          git config --global user.name "NotionSyncBot"
+          git config --global user.email "bot@github.com"
+          git add .
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-synced new notes from Notion" && git push)
