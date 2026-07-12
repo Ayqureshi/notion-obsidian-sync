@@ -5,6 +5,9 @@ on:
     - cron: '0 */3 * * *'  # Runs every 3 hours
   workflow_dispatch:        # Allows manual trigger anytime from GitHub UI
 
+permissions:
+  contents: write           # Grants GitHub Actions permission to push commits to your repo
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -14,12 +17,11 @@ jobs:
 
       - name: Check Start Date Guard
         run: |
-          # Get today's date in YYYY-MM-DD format
-          TODAY=$(date +%Y-%m-%d)
-          START_DATE="2026-09-07"
-          
-          if [[ "$TODAY" < "$START_DATE" ]]; then
-            echo "Today ($TODAY) is before the start date ($START_DATE). Skipping execution."
+          CURRENT_SEC=$(date +%s)
+          START_SEC=$(date -d "2026-09-07" +%s)
+
+          if [ "$CURRENT_SEC" -lt "$START_SEC" ]; then
+            echo "Current date is before September 7, 2026. Skipping sync."
             exit 0
           fi
 
@@ -35,7 +37,7 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-          OBSIDIAN_BASE_DIR: "."  # Saves directly into repository root in the cloud
+          OBSIDIAN_BASE_DIR: "."
         run: python automation.py
 
       - name: Commit and Push New Notes to Repo
