@@ -1,21 +1,17 @@
 from datetime import datetime
-import json
 import os
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 # -------------------------------------------------------------------
-# Environment & Setup
+# Setup & Config
 # -------------------------------------------------------------------
 load_dotenv()
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID")
-BASE_DIR = os.environ.get("OBSIDIAN_BASE_DIR")
+BASE_DIR = os.environ.get("OBSIDIAN_BASE_DIR", ".")
 
-url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-
-headers = {
+HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
     "Notion-Version": "2022-06-28",
     "Content-Type": "application/json",
@@ -27,76 +23,142 @@ COURSE_MAP = {
 }
 
 # -------------------------------------------------------------------
-# Fetch Notion Tasks
+# Helper Parsing Functions
 # -------------------------------------------------------------------
-var = requests.post(url, headers=headers).json()
-results = var.get("results", [])
+def get_plain_text(prop_obj, prop_type="title"):
+    """Extracts text safely from various Notion property types."""
+    if not prop_obj:
+        return ""
+    
+    if prop_obj.get("type") == "formula":
+        formula_data = prop_obj.get("formula", {})
+        form_type = formula_data.get("type")
+        if form_type == "string":
+            return formula_data.get("string", "")
+        elif form_type == "number":
+            return str(formula_data.get("number", ""))
+        return ""
 
-for tasks in results:
-    # 1. Assignment Name
-    title_list = tasks["properties"].get("name", {}).get("title", [])
-    assignment_name = (
-        title_list[0]["plain_text"] if title_list else "Untitled Task"
-    )
+    if prop_type in ["title", "rich_text"]:
+        data = prop_obj.get(prop_type, [])
+        return data[0]["plain_text"] if data else ""
+    elif prop_type == "select":
+        sel = prop_obj.get("select")
+        return sel.get("name", "") if sel else ""
+    elif prop_type == "status":
+        stat = prop_obj.get("status")
+        return stat.get("name", "") if stat else ""
+    return ""
 
-    # 2. Due Date Formatting
-    date_obj = tasks["properties"].get("due date", {}).get("date")
-    raw_date = date_obj.get("start") if date_obj else "No Due Date"
-
-    if raw_date != "No Due Date":
+def format_date(date_prop, prop_name="due date"):
+    """Formats Notion date ISO string into human readable text."""
+    if not date_prop:
+        return "No Due Date"
+    date_obj = date_prop.get("date")
+    if not date_obj:
+        return "No Due Date"
+    
+    raw_date = date_obj.get("start")
+    if not raw_date:
+        return "No Due Date"
+        
+    try:
         dt = datetime.fromisoformat(raw_date)
-        due_date = dt.strftime("%B %d, %Y at %I:%M %p")
-    else:
-        due_date = "No Due Date"
+        # Keeps your original academic assignment timestamp formatting
+        if prop_name == "due date":
+            return dt.strftime("%B %d, %Y at %I:%M %p")
+        return dt.strftime("%B %d, %Y")
+    except ValueError:
+        return raw_date
 
-    # 3. Status & Priority
-    status_obj = tasks["properties"].get("completion", {}).get("status")
+# -------------------------------------------------------------------
+# Custom Pipeline Processors
+# -------------------------------------------------------------------
+def process_lab_work_task(page, target_folder):
+    """Parser tailored to Lab Work properties (Impact, Urgency, Status)."""
+    props = page.get("properties", {})
+    
+    title = get_plain_text(props.get("Name") or props.get("name") or props.get("Task"), "title") or "Untitled Task"
+    status = get_plain_text(props.get("Status") or props.get("completion"), "status") or "To do"
+    impact = get_plain_text(props.get("Impact"), "select") or "Unspecified Impact"
+    urgency = get_plain_text(props.get("Urgency"), "select") or "Unspecified Urgency"
+    due_date = format_date(props.get("Due Date") or props.get("due date"), "due date")
+
+    content = f"""---
+priority: {impact}
+status: {status}
+due_date: {due_date}
+urgency: {urgency}
+type: lab_task
+---
+
+# {title}
+
+## Lab Notes
+- 
+"""
+    return title, content, target_folder
+
+def process_research_task(page, target_folder):
+    """Parser tailored to Research To-Do List (Category, Priority, Recur)."""
+    props = page.get("properties", {})
+    
+    title = get_plain_text(props.get("Name") or props.get("name"), "title") or "Untitled Task"
+    status = get_plain_text(props.get("Status"), "status") or "To do"
+    category = get_plain_text(props.get("Category"), "select") or "General"
+    priority = get_plain_text(props.get("Priority"), "select") or "Normal"
+    due_date = format_date(props.get("Due Date"), "simple")
+    recur_interval = get_plain_text(props.get("Recur Interval"), "rich_text") or "None"
+
+    content = f"""---
+priority: {priority}
+status: {status}
+due_date: {due_date}
+category: {category}
+recurring: {recur_interval}
+type: phd_research
+---
+
+# {title}
+
+## Research Notes
+- 
+"""
+    return title, content, target_folder
+
+def process_class_and_ta_task(page, target_folder):
+    """Your classic dynamic parser that maps via Course Pages & TA roles."""
+    props = page.get("properties", {})
+    
+    title_list = props.get("name", {}).get("title", [])
+    title = title_list[0]["plain_text"] if title_list else "Untitled Task"
+
+    due_date = format_date(props.get("due date"), "due date")
+
+    status_obj = props.get("completion", {}).get("status")
     status = status_obj.get("name") if status_obj else "No Status"
 
-    priority_obj = tasks["properties"].get("priority", {}).get("status")
+    priority_obj = props.get("priority", {}).get("status")
     priority = priority_obj.get("name") if priority_obj else "No Priority"
 
-    # 4. Course Identification
-    course_list = tasks["properties"].get("courses", {}).get("relation", [])
+    course_list = props.get("courses", {}).get("relation", [])
     course_id = course_list[0]["id"] if course_list else None
-    course_name = (
-        COURSE_MAP.get(course_id, "Unknown Course")
-        if course_id
-        else "No Course"
-    )
+    course_name = COURSE_MAP.get(course_id, "Unknown Course") if course_id else "No Course"
 
-    print(f"Assignment:  {assignment_name}")
-    print(f"Status:      {status}")
-    print(f"Priority:    {priority}")
-    print(f"Due Date:    {due_date}")
-    print(f"Course Name: {course_name}")
-    print("-" * 30)
-
-    # 5. Check Role via Course Page API
+    # Deep lookup on Course Page to check for TA role
     is_ta = "student"
     if course_id:
         course_url = f"https://api.notion.com/v1/pages/{course_id}"
-        c = requests.get(course_url, headers=headers).json()
-
+        c = requests.get(course_url, headers=HEADERS).json()
         is_ta_obj = c.get("properties", {}).get("role", {}).get("select")
         if is_ta_obj:
             is_ta = is_ta_obj.get("name", "student").lower()
 
-    folder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
-    print(f"Role:        {is_ta}")
+    # Dynamically build destination path like your original script
+    subfolder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
+    final_folder = os.path.join(target_folder, subfolder, course_name)
 
-    # 6. Build Target Directory & Filepath
-    target_dir = os.path.join(BASE_DIR, folder, course_name)
-    os.makedirs(target_dir, exist_ok=True)
-
-    safe_title = (
-        assignment_name.replace("/", "-").replace(":", "-").replace("?", "")
-    )
-    filepath = os.path.join(target_dir, f"{safe_title}.md")
-
-    # 7. Write Markdown File
-    if not os.path.exists(filepath):
-        md_content = f"""---
+    content = f"""---
 priority: {priority}
 status: {status}
 due_date: {due_date}
@@ -104,13 +166,71 @@ course: {course_name}
 role: {is_ta}
 ---
 
-# {assignment_name}
+# {title}
 
 ## Notes
 - 
 """
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(md_content)
-        print(f"Created new Obsidian note: {filepath}")
-    else:
-        print(f"Note already exists (Skipping): {filepath}")
+    return title, content, final_folder
+
+# -------------------------------------------------------------------
+# Unified Pipeline Matrix
+# -------------------------------------------------------------------
+SYNC_PIPELINES = [
+    {
+        "db_id": os.environ.get("NOTION_LAB_DB_ID"),
+        "base_folder": os.path.join(BASE_DIR, "20_Areas", "21_Lab-Research"),
+        "parser": process_lab_work_task,
+        "label": "Lab Work"
+    },
+    {
+        "db_id": os.environ.get("NOTION_RESEARCH_DB_ID"),
+        "base_folder": os.path.join(BASE_DIR, "20_Areas", "22_PhD-Research"),
+        "parser": process_research_task,
+        "label": "Research To-Do List"
+    },
+    {
+        "db_id": os.environ.get("NOTION_DATABASE_ID"), # Your classic student notes DB ID
+        "base_folder": os.path.join(BASE_DIR, "10_Projects"),                  # Dynamically broken out inside the parser
+        "parser": process_class_and_ta_task,
+        "label": "Class & TA Notes"
+    }
+]
+
+def run_sync():
+    for pipeline in SYNC_PIPELINES:
+        db_id = pipeline["db_id"]
+        base_folder = pipeline["base_folder"]
+        parse_func = pipeline["parser"]
+        label = pipeline["label"]
+
+        if not db_id:
+            print(f"Skipping {label}: Database ID missing in environment configurations.")
+            continue
+
+        url = f"https://api.notion.com/v1/databases/{db_id}/query"
+        res = requests.post(url, headers=HEADERS)
+
+        if res.status_code != 200:
+            print(f"Failed to query {label}: {res.text}")
+            continue
+
+        pages = res.json().get("results", [])
+        print(f"\n=== Syncing Pipeline: {label} ({len(pages)} items) ===")
+
+        for page in pages:
+            title, md_content, final_target_dir = parse_func(page, base_folder)
+            os.makedirs(final_target_dir, exist_ok=True)
+            
+            safe_title = title.replace("/", "-").replace(":", "-").replace("?", "")
+            filepath = os.path.join(final_target_dir, f"{safe_title}.md")
+
+            if not os.path.exists(filepath):
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(md_content)
+                print(f"  [+] Created: {filepath}")
+            else:
+                print(f"  [-] Exists (Skipping): {filepath}")
+
+if __name__ == "__main__":
+    run_sync()
