@@ -2,7 +2,7 @@ name: Notion to Obsidian Auto-Sync
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # Runs every 3 hours
+    - cron: '20 * * * *'  # Runs every 3 hours
   workflow_dispatch:        # Allows manual trigger anytime from GitHub UI
 
 permissions:

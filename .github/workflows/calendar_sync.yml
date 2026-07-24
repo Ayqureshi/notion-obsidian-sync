@@ -3,7 +3,7 @@ name: Router & Calendar Sync Pipeline
 on:
   schedule:
     # Runs automatically every 3 hours
-    - cron: '0 */3 * * *'
+    - cron: '15 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
