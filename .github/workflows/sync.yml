@@ -2,7 +2,7 @@ name: Notion to Obsidian Auto-Sync
 
 on:
   schedule:
-    - cron: '20 * * * *'  # Runs every 3 hours
+    - cron: '20 * * * *'  # Runs automatically every hour at :20
   workflow_dispatch:        # Allows manual trigger anytime from GitHub UI
 
 permissions:
@@ -14,16 +14,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Check Start Date Guard
-        run: |
-          CURRENT_SEC=$(date +%s)
-          START_SEC=$(date -d "2026-09-07" +%s)
-
-          if [ "$CURRENT_SEC" -lt "$START_SEC" ]; then
-            echo "Current date is before September 7, 2026. Skipping sync."
-            exit 0
-          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
