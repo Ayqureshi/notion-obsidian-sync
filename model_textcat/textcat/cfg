@@ -1,0 +1,9 @@
+{
+  "labels":[
+    "All Lab Tasks",
+    "course work to do",
+    "Research To-Do List"
+  ],
+  "threshold":0.0,
+  "positive_label":null
+}
