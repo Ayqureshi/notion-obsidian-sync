@@ -64,7 +64,6 @@ def format_date(date_prop, prop_name="due date"):
         
     try:
         dt = datetime.fromisoformat(raw_date)
-        # Keeps your original academic assignment timestamp formatting
         if prop_name == "due date":
             return dt.strftime("%B %d, %Y at %I:%M %p")
         return dt.strftime("%B %d, %Y")
@@ -127,7 +126,7 @@ type: phd_research
     return title, content, target_folder
 
 def process_class_and_ta_task(page, target_folder):
-    """Your classic dynamic parser that maps via Course Pages & TA roles."""
+    """Dynamic parser that maps via Course Pages & TA roles strictly into 10_Projects."""
     props = page.get("properties", {})
     
     title_list = props.get("name", {}).get("title", [])
@@ -143,7 +142,7 @@ def process_class_and_ta_task(page, target_folder):
 
     course_list = props.get("courses", {}).get("relation", [])
     course_id = course_list[0]["id"] if course_list else None
-    course_name = COURSE_MAP.get(course_id, "Unknown Course") if course_id else "No Course"
+    course_name = COURSE_MAP.get(course_id, "No Course") if course_id else "No Course"
 
     # Deep lookup on Course Page to check for TA role
     is_ta = "student"
@@ -154,8 +153,10 @@ def process_class_and_ta_task(page, target_folder):
         if is_ta_obj:
             is_ta = is_ta_obj.get("name", "student").lower()
 
-    # Dynamically build destination path like your original script
+    # Dynamically build destination path inside 10_Projects
     subfolder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
+    
+    # Ensures path resolves to PhD Notes/10_Projects/11_Classes/<course_name>
     final_folder = os.path.join(target_folder, subfolder, course_name)
 
     content = f"""---
@@ -190,8 +191,8 @@ SYNC_PIPELINES = [
         "label": "Research To-Do List"
     },
     {
-        "db_id": os.environ.get("NOTION_DATABASE_ID"), # Your classic student notes DB ID
-        "base_folder": os.path.join(BASE_DIR, "10_Projects"),                  # Dynamically broken out inside the parser
+        "db_id": os.environ.get("NOTION_DATABASE_ID"),
+        "base_folder": os.path.join(BASE_DIR, "10_Projects"), # Explicitly maps under 10_Projects
         "parser": process_class_and_ta_task,
         "label": "Class & TA Notes"
     }
