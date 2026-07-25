@@ -1,10 +1,12 @@
 name: Router & Calendar Sync Pipeline
 
 on:
-  schedule:
-    # Runs automatically every 3 hours
-    - cron: '15 * * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  repository_dispatch:
+    types: [calendar_sync, sync_vault] # Listens for API POST requests from macOS Shortcuts
+  workflow_dispatch:                   # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write                     # Grants permission to push git commits back to the repo
 
 jobs:
   sync-calendar:
@@ -23,6 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install spacy click icalendar requests python-dotenv "numpy<2.0"
+          python -m spacy download en_core_web_sm
 
       - name: Execute Calendar Router Script
         env:
@@ -32,3 +35,11 @@ jobs:
           NOTION_RESEARCH_DB_ID: ${{ secrets.NOTION_RESEARCH_DB_ID }}
           ICS_URL: ${{ secrets.ICS_URL }}
         run: python calendar_router.py
+
+      - name: Commit and Push Changes to Repo
+        run: |
+          git config --global user.name "NotionSyncBot"
+          git config --global user.email "bot@github.com"
+          git add .
+          git status
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-synced calendar router changes" && git push)
