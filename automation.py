@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import re
 import requests
 from dotenv import load_dotenv
 
@@ -17,14 +18,24 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
+# Optional explicit ID/Name mapping for your courses
 COURSE_MAP = {
-    "ec8ef0fd-44a1-8252-a4b9-01cc6d08aab2": "Linguistics",
-    "609ef0fd-44a1-8301-bc13-013b0071b59b": "Psychology",
+    "Fund Of Cogn Neurosci Lang": "Fund Of Cogn Neurosci Lang",
+    "Csl Phd Lectures Series": "Csl Phd Lectures Series",
+    "Lab Visual Language": "Lab Visual Language",
 }
+
+# Cache fetched course pages during execution to avoid repeated API calls
+COURSE_CACHE = {}
 
 # -------------------------------------------------------------------
 # Helper Parsing Functions
 # -------------------------------------------------------------------
+def sanitize_filename(title: str) -> str:
+    """Removes illegal file characters to keep clean Markdown names."""
+    clean = re.sub(r'[\\/*?:"<>|]', "", title).strip()
+    return clean if clean else "Untitled_Task"
+
 def get_plain_text(prop_obj, prop_type="title"):
     """Extracts text safely from various Notion property types."""
     if not prop_obj:
@@ -106,7 +117,7 @@ def process_research_task(page, target_folder):
     status = get_plain_text(props.get("Status"), "status") or "To do"
     category = get_plain_text(props.get("Category"), "select") or "General"
     priority = get_plain_text(props.get("Priority"), "select") or "Normal"
-    due_date = format_date(props.get("Due Date"), "simple")
+    due_date = format_date(props.get("Due Date") or props.get("due date"), "simple")
     recur_interval = get_plain_text(props.get("Recur Interval"), "rich_text") or "None"
 
     content = f"""---
@@ -129,34 +140,53 @@ def process_class_and_ta_task(page, target_folder):
     """Dynamic parser that maps via Course Pages & TA roles strictly into 10_Projects."""
     props = page.get("properties", {})
     
-    title_list = props.get("name", {}).get("title", [])
+    title_list = props.get("name", {}).get("title", []) or props.get("Name", {}).get("title", [])
     title = title_list[0]["plain_text"] if title_list else "Untitled Task"
 
-    due_date = format_date(props.get("due date"), "due date")
+    due_date = format_date(props.get("due date") or props.get("Due Date"), "due date")
 
-    status_obj = props.get("completion", {}).get("status")
+    status_obj = props.get("completion", {}).get("status") or props.get("Status", {}).get("status")
     status = status_obj.get("name") if status_obj else "No Status"
 
-    priority_obj = props.get("priority", {}).get("status")
+    priority_obj = props.get("priority", {}).get("status") or props.get("Priority", {}).get("status")
     priority = priority_obj.get("name") if priority_obj else "No Priority"
 
-    course_list = props.get("courses", {}).get("relation", [])
+    # Extract relation for Course
+    course_list = props.get("courses", {}).get("relation", []) or props.get("Course", {}).get("relation", [])
     course_id = course_list[0]["id"] if course_list else None
-    course_name = COURSE_MAP.get(course_id, "No Course") if course_id else "No Course"
-
-    # Deep lookup on Course Page to check for TA role
-    is_ta = "student"
-    if course_id:
-        course_url = f"https://api.notion.com/v1/pages/{course_id}"
-        c = requests.get(course_url, headers=HEADERS).json()
-        is_ta_obj = c.get("properties", {}).get("role", {}).get("select")
-        if is_ta_obj:
-            is_ta = is_ta_obj.get("name", "student").lower()
-
-    # Dynamically build destination path inside 10_Projects
-    subfolder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
     
-    # Ensures path resolves to PhD Notes/10_Projects/11_Classes/<course_name>
+    course_name = "No Course"
+    is_ta = "student"
+
+    if course_id:
+        if course_id in COURSE_MAP:
+            course_name = COURSE_MAP[course_id]
+        elif course_id in COURSE_CACHE:
+            course_name, is_ta = COURSE_CACHE[course_id]
+        else:
+            try:
+                course_url = f"https://api.notion.com/v1/pages/{course_id}"
+                c = requests.get(course_url, headers=HEADERS).json()
+                c_props = c.get("properties", {})
+                
+                # Retrieve course page title dynamically
+                title_prop = c_props.get("Name") or c_props.get("title") or c_props.get("Course Name")
+                if title_prop and title_prop.get("title") and len(title_prop["title"]) > 0:
+                    fetched_title = title_prop["title"][0]["plain_text"]
+                    course_name = COURSE_MAP.get(fetched_title, fetched_title)
+
+                # Retrieve TA / Student role
+                is_ta_obj = c_props.get("role", {}).get("select") or c_props.get("Role", {}).get("select")
+                if is_ta_obj:
+                    is_ta = is_ta_obj.get("name", "student").lower()
+
+                # Cache details for subsequent items in the loop
+                COURSE_CACHE[course_id] = (course_name, is_ta)
+            except Exception as e:
+                print(f"Error fetching course details for ID {course_id}: {e}")
+
+    # Build folder path dynamically
+    subfolder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
     final_folder = os.path.join(target_folder, subfolder, course_name)
 
     content = f"""---
@@ -192,7 +222,7 @@ SYNC_PIPELINES = [
     },
     {
         "db_id": os.environ.get("NOTION_DATABASE_ID"),
-        "base_folder": os.path.join(BASE_DIR, "10_Projects"), # Explicitly maps under 10_Projects
+        "base_folder": os.path.join(BASE_DIR, "10_Projects"),
         "parser": process_class_and_ta_task,
         "label": "Class & TA Notes"
     }
@@ -223,7 +253,7 @@ def run_sync():
             title, md_content, final_target_dir = parse_func(page, base_folder)
             os.makedirs(final_target_dir, exist_ok=True)
             
-            safe_title = title.replace("/", "-").replace(":", "-").replace("?", "")
+            safe_title = sanitize_filename(title)
             filepath = os.path.join(final_target_dir, f"{safe_title}.md")
 
             if not os.path.exists(filepath):
