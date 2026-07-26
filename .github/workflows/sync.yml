@@ -23,7 +23,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests python-dotenv spacy
+          pip install requests python-dotenv spacy click
           python -m spacy download en_core_web_sm
 
       - name: Run Automation Script
