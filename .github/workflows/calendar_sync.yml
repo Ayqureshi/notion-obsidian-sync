@@ -2,7 +2,7 @@ name: Router & Calendar Sync Pipeline
 
 on:
   repository_dispatch:
-    types: [calendar_sync, sync_vault] # Listens for API POST requests from macOS Shortcuts
+    types: [calendar_sync]             # Only triggers on calendar_sync event type
   workflow_dispatch:                   # Allows manual trigger from GitHub UI
 
 permissions:

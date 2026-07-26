@@ -2,8 +2,8 @@ name: Notion to Obsidian Auto-Sync
 
 on:
   repository_dispatch:
-    types: [calendar_sync, sync_vault] # Listens for API POST requests from macOS Shortcuts
-  workflow_dispatch:                   # Keeps the manual "Run workflow" button in GitHub UI
+    types: [sync_vault]                 # Only triggers on sync_vault event type
+  workflow_dispatch:                   # Keeps manual "Run workflow" button in GitHub UI
 
 permissions:
   contents: write                     # Grants permission to commit and push changes back to the repo
