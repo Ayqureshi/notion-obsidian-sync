@@ -5,6 +5,29 @@ from spacy.training import Example
 MODEL_DIR = "./model_textcat"
 LABELS = ["All Lab Tasks", "course work to do", "Research To-Do List"]
 
+COURSE_ALIASES = {
+    "Fundamentals Of Cognitive Neuroscience of Language": (
+        "fundamentals of cognitive neuroscience of language",
+        "cognitive neuroscience",
+        "neuroscience",
+        "cognition",
+        "neuro",
+        "fcl",
+    ),
+    "Csl Phd Lectures Series": (
+        "cog sci of language",
+        "cogsci",
+        "csl phd",
+        "csl",
+    ),
+    "Lab Visual Language": (
+        "lab visual language",
+        "visual language",
+        "lab visual",
+        "vll",
+    ),
+}
+
 # Expanded training set for real-world coverage
 TRAIN_DATA = [
     # All Lab Tasks
@@ -85,6 +108,18 @@ def classify_title(title: str) -> str:
         return "course work to do"
         
     return max(doc.cats, key=doc.cats.get)
+
+
+def classify_course(title: str) -> str | None:
+    """Returns the exact Notion course title for an unambiguous alias."""
+    if not title:
+        return None
+
+    text_lower = title.lower()
+    for course_name, aliases in COURSE_ALIASES.items():
+        if any(alias in text_lower for alias in aliases):
+            return course_name
+    return None
 
 # --- Quick Test ---
 if __name__ == "__main__":

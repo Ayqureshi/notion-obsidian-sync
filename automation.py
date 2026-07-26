@@ -36,6 +36,14 @@ def sanitize_filename(title: str) -> str:
     clean = re.sub(r'[\\/*?:"<>|]', "", title).strip()
     return clean if clean else "Untitled_Task"
 
+def is_finished(page) -> bool:
+    """Returns whether a Notion page has its Finished checkbox selected."""
+    return (
+        page.get("properties", {})
+        .get("Finished", {})
+        .get("checkbox", False)
+    )
+
 def get_plain_text(prop_obj, prop_type="title"):
     """Extracts text safely from various Notion property types."""
     if not prop_obj:
@@ -250,6 +258,10 @@ def run_sync():
         print(f"\n=== Syncing Pipeline: {label} ({len(pages)} items) ===")
 
         for page in pages:
+            if is_finished(page):
+                print("  [-] Finished (Skipping)")
+                continue
+
             title, md_content, final_target_dir = parse_func(page, base_folder)
             os.makedirs(final_target_dir, exist_ok=True)
             
