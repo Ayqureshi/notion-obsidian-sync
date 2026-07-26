@@ -1,115 +1,163 @@
-import os
-import requests
 from datetime import datetime
-from icalendar import Calendar
+import os
+import re
+import requests
 from dotenv import load_dotenv
+from icalendar import Calendar
 
+# -------------------------------------------------------------------
+# Setup & Config
+# -------------------------------------------------------------------
 load_dotenv()
-
-# Import your custom function from classification.py
-from classification import classify_title
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 ICS_URL = os.environ.get("ICS_URL")
 
-DB_MAP = {
-    "All Lab Tasks": os.environ.get("NOTION_LAB_DB_ID"),
-    "course work to do": os.environ.get("NOTION_DATABASE_ID"),
-    "Research To-Do List": os.environ.get("NOTION_RESEARCH_DB_ID")
-}
-
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": "2022-06-28",
     "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
 }
 
-def is_duplicate_event(title, start_iso, database_id):
-    query_url = f"https://api.notion.com/v1/databases/{database_id}/query"
+# Target Databases
+NOTION_LAB_DB_ID = os.environ.get("NOTION_LAB_DB_ID")
+NOTION_RESEARCH_DB_ID = os.environ.get("NOTION_RESEARCH_DB_ID")
+NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID")  # Default Class/TA DB
+
+# Keyword Aliases for Course & Category Resolution
+COURSE_ALIASES = {
+    "neuro": "Fund Of Cogn Neurosci Lang",
+    "neuroscience": "Fund Of Cogn Neurosci Lang",
+    "cognition": "Fund Of Cogn Neurosci Lang",
+    "csl": "Csl Phd Lectures Series",
+    "visual": "Lab Visual Language",
+    "lab": "Lab Work",
+    "research": "Research To-Do List",
+}
+
+# -------------------------------------------------------------------
+# Helper & Route Logic
+# -------------------------------------------------------------------
+def page_exists_in_notion(db_id: str, title: str) -> bool:
+    """Queries Notion DB to check if an event title is already present."""
+    if not db_id:
+        return False
+    url = f"https://api.notion.com/v1/databases/{db_id}/query"
     payload = {
         "filter": {
-            "and": [
+            "or": [
                 {"property": "Name", "title": {"equals": title}},
-                {"property": "Due Date", "date": {"equals": start_iso}}
+                {"property": "name", "title": {"equals": title}},
             ]
         }
     }
-    res = requests.post(query_url, json=payload, headers=HEADERS)
-    if res.status_code == 200:
-        results = res.json().get("results", [])
-        return len(results) > 0
+    try:
+        res = requests.post(url, headers=HEADERS, json=payload)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            return len(results) > 0
+    except Exception as e:
+        print(f"Error checking duplicate status for '{title}': {e}")
     return False
 
-def send_to_notion(title, start_iso, database_id):
-    create_url = "https://api.notion.com/v1/pages"
+
+def determine_target_pipeline(event_title: str) -> dict:
+    """
+    Guarantees every event gets a route.
+    1. Checks keyword aliases.
+    2. Defaults to 'Class & TA Notes' (NOTION_DATABASE_ID) as catch-all.
+    """
+    title_lower = event_title.lower()
+
+    # 1. Match Keyword Aliases
+    for keyword, matched_category in COURSE_ALIASES.items():
+        if keyword in title_lower:
+            if matched_category == "Lab Work" and NOTION_LAB_DB_ID:
+                return {"db_id": NOTION_LAB_DB_ID, "label": "Lab Work", "category": matched_category}
+            elif matched_category == "Research To-Do List" and NOTION_RESEARCH_DB_ID:
+                return {"db_id": NOTION_RESEARCH_DB_ID, "label": "Research To-Do List", "category": matched_category}
+            else:
+                return {"db_id": NOTION_DATABASE_ID, "label": "Class & TA Notes", "category": matched_category}
+
+    # 2. ABSOLUTE CATCH-ALL FALLBACK (Guarantees 100% routing rate)
+    return {
+        "db_id": NOTION_DATABASE_ID,
+        "label": "Class & TA Notes",
+        "category": "General Coursework"
+    }
+
+
+def create_notion_page(db_id: str, title: str, start_dt: datetime, category: str):
+    """Creates a page entry in the target Notion database."""
+    url = "https://api.notion.com/v1/pages"
+    
+    # ISO 8601 string format
+    date_str = start_dt.isoformat() if isinstance(start_dt, datetime) else str(start_dt)
+
     payload = {
-        "parent": {"database_id": database_id},
+        "parent": {"database_id": db_id},
         "properties": {
-            "Name": {"title": [{"text": {"content": title}}]},
-            "Due Date": {"date": {"start": start_iso}}
+            "Name": {
+                "title": [{"text": {"content": title}}]
+            },
+            "Due Date": {
+                "date": {"start": date_str}
+            }
         }
     }
-    res = requests.post(create_url, json=payload, headers=HEADERS)
-    return res.status_code == 200
 
-def get_existing_notion_keys(database_id):
-    """Fetches all existing event keys (title + date) from a Notion DB in a single request."""
-    query_url = f"https://api.notion.com/v1/databases/{database_id}/query"
-    res = requests.post(query_url, headers=HEADERS)
-    existing = set()
+    res = requests.post(url, headers=HEADERS, json=payload)
     if res.status_code == 200:
-        for page in res.json().get("results", []):
-            props = page.get("properties", {})
-            # Extract title
-            title_objs = props.get("Name", {}).get("title", [])
-            title = title_objs[0].get("text", {}).get("content") if title_objs else None
-            # Extract date
-            date_obj = props.get("Due Date", {}).get("date")
-            start_date = date_obj.get("start") if date_obj else None
-            
-            if title and start_date:
-                existing.add((title, start_date))
-    return existing
+        print(f"  [+] Successfully routed '{title}' -> ({category})")
+    else:
+        # Fallback property key if 'Name' vs 'name' differs
+        payload["properties"]["name"] = payload["properties"].pop("Name")
+        res_retry = requests.post(url, headers=HEADERS, json=payload)
+        if res_retry.status_code == 200:
+            print(f"  [+] Successfully routed '{title}' -> ({category})")
+        else:
+            print(f"  [!] Failed to insert '{title}': {res.text}")
 
-def sync_calendar():
-    if not ICS_URL or not NOTION_TOKEN:
-        print("Missing required environment variables. Exiting.")
+# -------------------------------------------------------------------
+# Main Sync Pipeline
+# -------------------------------------------------------------------
+def run_calendar_sync():
+    if not ICS_URL:
+        print("Error: ICS_URL environment variable is missing.")
         return
 
-    res = requests.get(ICS_URL)
-    if res.status_code != 200:
-        print("Failed to download ICS feed.")
+    print("Fetching Outlook ICS feed...")
+    response = requests.get(ICS_URL)
+    if response.status_code != 200:
+        print(f"Failed to fetch ICS feed: {response.status_code}")
         return
 
-    # Pre-fetch existing entries for each mapped DB (3 API calls total instead of dozens)
-    db_cache = {
-        db_id: get_existing_notion_keys(db_id) 
-        for db_id in DB_MAP.values() if db_id
-    }
+    cal = Calendar.from_ical(response.content)
+    events_processed = 0
 
-    cal = Calendar.from_ical(res.content)
-    
-    for event in cal.walk('VEVENT'):
-        title = str(event.get('summary'))
-        start_time = event.get('dtstart').dt
-        
-        start_iso = start_time.isoformat() if isinstance(start_time, datetime) else start_time.strftime("%Y-%m-%d")
+    print("\n=== Processing Calendar Events ===")
+    for component in cal.walk():
+        if component.name == "VEVENT":
+            summary = str(component.get("summary", "Untitled Event"))
+            dtstart = component.get("dtstart").dt
 
-        predicted_bin = classify_title(title)
-        target_db_id = DB_MAP.get(predicted_bin)
+            route = determine_target_pipeline(summary)
+            target_db_id = route["db_id"]
 
-        if not target_db_id:
-            continue
+            if not target_db_id:
+                print(f"  [!] Missing DB ID for route '{route['label']}'. Skipping.")
+                continue
 
-        # In-memory instant check (Zero API calls!)
-        if (title, start_iso) in db_cache[target_db_id]:
-            print(f"Skipping duplicate: '{title}' [{start_iso}]")
-            continue
+            # Deduplication check
+            if page_exists_in_notion(target_db_id, summary):
+                print(f"  [-] Already exists in Notion (Skipping): {summary}")
+                continue
 
-        if send_to_notion(title, start_iso, target_db_id):
-            print(f"Event: '{title}' ---> Routed to: '{predicted_bin}'")
-            # Update local set so same-run duplicates are caught
-            db_cache[target_db_id].add((title, start_iso))
+            # Route and create page
+            create_notion_page(target_db_id, summary, dtstart, route["category"])
+            events_processed += 1
+
+    print(f"\nDone! Processed {events_processed} new calendar events.")
 
 if __name__ == "__main__":
-    sync_calendar()
+    run_calendar_sync()
