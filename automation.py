@@ -193,10 +193,10 @@ def process_class_and_ta_task(page, target_folder):
                 COURSE_CACHE[course_id] = (course_name, is_ta)
             except Exception as e:
                 print(f"Error fetching course details for ID {course_id}: {e}")
-    else:
-        # Calendar-created coursework may not yet have a Notion relation.
-        # Use the shared title classifier so those notes still reach the
-        # correct class folder instead of remaining under "No Course".
+    if course_name == "No Course":
+        # Calendar-created coursework may have no relation, or a relation
+        # whose course title cannot be resolved. Use the shared classifier
+        # before falling back to the No Course folder.
         classified_course = classify_course(title)
         if classified_course:
             course_name = classified_course
