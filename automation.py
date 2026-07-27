@@ -3,6 +3,7 @@ import os
 import re
 import requests
 from dotenv import load_dotenv
+from classification import classify_course
 
 # -------------------------------------------------------------------
 # Setup & Config
@@ -192,6 +193,13 @@ def process_class_and_ta_task(page, target_folder):
                 COURSE_CACHE[course_id] = (course_name, is_ta)
             except Exception as e:
                 print(f"Error fetching course details for ID {course_id}: {e}")
+    else:
+        # Calendar-created coursework may not yet have a Notion relation.
+        # Use the shared title classifier so those notes still reach the
+        # correct class folder instead of remaining under "No Course".
+        classified_course = classify_course(title)
+        if classified_course:
+            course_name = classified_course
 
     # Build folder path dynamically
     subfolder = "12_TA-ship" if is_ta == "ta" else "11_Classes"
