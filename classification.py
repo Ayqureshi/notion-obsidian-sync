@@ -66,6 +66,26 @@ COURSE_ALIASES = {
         "lab visual",
         "vll",
     ),
+    "Phonetics": (
+        "phonetics",
+        "phonetic transcription",
+        "ipa transcription",
+        "acoustic phonetics",
+        "articulatory phonetics",
+        "praat",
+        "spectrogram",
+        "waveform analysis",
+        "formant",
+        "voice onset time",
+        "vot analysis",
+        "pitch track",
+    ),
+    "Introduction to Linguistics": (
+        "introduction to linguistics",
+        "intro to linguistics",
+        "intro linguistics",
+        "intro ling",
+    ),
 }
 
 # Expanded training set for real-world coverage
@@ -93,6 +113,9 @@ TRAIN_DATA = [
     ("Prepare questions for the departmental talk", "course work to do"),
     ("FCL neuroscience exam", "course work to do"),
     ("Review brain and language lecture", "course work to do"),
+    ("Phonetics transcription homework", "course work to do"),
+    ("Praat spectrogram assignment", "course work to do"),
+    ("Analyze vowel formants for phonetics lab", "course work to do"),
     
     # Research To-Do List
     ("Draft literature review section 3", "Research To-Do List"),
