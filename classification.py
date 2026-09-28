@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     Example = None
 
 MODEL_DIR = Path(__file__).resolve().parent / "model_textcat"
-LABELS = ["All Lab Tasks", "course work to do", "Research To-Do List"]
+LABELS = ["Personal Tasks", "course work to do", "Research To-Do List"]
 
 COURSE_ALIASES = {
     "Fundamentals Of Cognitive Neuroscience of Language": (
@@ -90,12 +90,12 @@ COURSE_ALIASES = {
 
 # Expanded training set for real-world coverage
 TRAIN_DATA = [
-    # All Lab Tasks
-    ("Lab meeting with team", "All Lab Tasks"),
-    ("Restart server and test websocket integration", "All Lab Tasks"),
-    ("Sync with lab supervisor regarding equipment", "All Lab Tasks"),
-    ("Research lab dinner", "All Lab Tasks"),
-    ("Order new lab hardware", "All Lab Tasks"),
+    # Personal Tasks
+    ("Lab meeting with team", "Personal Tasks"),
+    ("Restart server and test websocket integration", "Personal Tasks"),
+    ("Sync with lab supervisor regarding equipment", "Personal Tasks"),
+    ("Research lab dinner", "Personal Tasks"),
+    ("Order new lab hardware", "Personal Tasks"),
     
     # course work to do
     ("LING 701 Reading assignment", "course work to do"),
@@ -199,7 +199,7 @@ def classify_title(title: str) -> str:
             "server", "equipment", "supabase", "shiny",
         )
     ):
-        return "All Lab Tasks"
+        return "Personal Tasks"
 
     if any(
         keyword in text_lower

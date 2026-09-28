@@ -151,11 +151,11 @@ def determine_target_pipeline(event_title: str) -> dict:
             "date_property": "due date",
         }
 
-    if category == "All Lab Tasks":
+    if category == "Personal Tasks":
         return {
             "db_id": NOTION_LAB_DB_ID,
-            "label": "Lab Work",
-            "category": "Lab Work",
+            "label": "Personal Tasks Dashboard",
+            "category": "Personal Tasks Dashboard",
             "course_name": None,
             "title_property": "Name",
             "date_property": "Due Date",

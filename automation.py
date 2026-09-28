@@ -93,8 +93,8 @@ def format_date(date_prop, prop_name="due date"):
 # -------------------------------------------------------------------
 # Custom Pipeline Processors
 # -------------------------------------------------------------------
-def process_lab_work_task(page, target_folder):
-    """Parser tailored to Lab Work properties (Impact, Urgency, Status)."""
+def process_personal_task(page, target_folder):
+    """Parser tailored to Personal Tasks Dashboard properties (Impact, Urgency, Status)."""
     props = page.get("properties", {})
     
     title = get_plain_text(props.get("Name") or props.get("name") or props.get("Task"), "title") or "Untitled Task"
@@ -108,7 +108,7 @@ priority: {impact}
 status: {status}
 due_date: {due_date}
 urgency: {urgency}
-type: lab_task
+type: personal_task
 ---
 
 # {title}
@@ -226,9 +226,9 @@ role: {is_ta}
 SYNC_PIPELINES = [
     {
         "db_id": os.environ.get("NOTION_LAB_DB_ID"),
-        "base_folder": os.path.join(BASE_DIR, "20_Areas", "21_Lab-Research"),
-        "parser": process_lab_work_task,
-        "label": "Lab Work"
+        "base_folder": os.path.join(BASE_DIR, "20_Areas", "21_Personal-Tasks"),
+        "parser": process_personal_task,
+        "label": "Personal Tasks Dashboard"
     },
     {
         "db_id": os.environ.get("NOTION_RESEARCH_DB_ID"),
