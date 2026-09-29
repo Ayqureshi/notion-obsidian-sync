@@ -205,6 +205,12 @@ def create_notion_page(
             },
             date_property: {
                 "date": {"start": date_str}
+            },
+            # Calendar-synced events always get an Obsidian note by default,
+            # regardless of any "checked by default" template set up in Notion
+            # for manually-created rows.
+            "No Obsidian MD": {
+                "checkbox": False
             }
         }
     }

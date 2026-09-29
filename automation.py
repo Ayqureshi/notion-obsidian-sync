@@ -45,6 +45,14 @@ def is_finished(page) -> bool:
         .get("checkbox", False)
     )
 
+def skip_obsidian_sync(page) -> bool:
+    """Returns whether a Notion page is flagged to stay Notion-only."""
+    return (
+        page.get("properties", {})
+        .get("No Obsidian MD", {})
+        .get("checkbox", False)
+    )
+
 def get_plain_text(prop_obj, prop_type="title"):
     """Extracts text safely from various Notion property types."""
     if not prop_obj:
@@ -268,6 +276,10 @@ def run_sync():
         for page in pages:
             if is_finished(page):
                 print("  [-] Finished (Skipping)")
+                continue
+
+            if skip_obsidian_sync(page):
+                print("  [-] Notion-only (No Obsidian MD checked, Skipping)")
                 continue
 
             title, md_content, final_target_dir = parse_func(page, base_folder)
