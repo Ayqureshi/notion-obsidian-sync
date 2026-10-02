@@ -9,5 +9,11 @@ type: phd_research
 
 # Mousetracking+Eyetracking
 
-## Research Notes
+## To-do list
+- Fix data collection for mouse tracking
+	- Tuesday
+- export bounding boxes
+	- manually draw them
+	- data viewer to look like text when it is a picture
+	- 
 - 
