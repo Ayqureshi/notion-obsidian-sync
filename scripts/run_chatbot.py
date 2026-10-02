@@ -11,7 +11,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-REPO_DIR = Path(__file__).resolve().parent
+REPO_DIR = Path(__file__).resolve().parent.parent
 BACKEND_HOST = "127.0.0.1"
 BACKEND_PORT = 8000
 STARTUP_TIMEOUT_SECONDS = 180
