@@ -40,7 +40,7 @@ def main():
     if is_backend_up():
         print("Backend already running on port 8000, reusing it.")
     else:
-        backend_process = subprocess.Popen([sys.executable, "chatbot.py"], cwd=REPO_DIR)
+        backend_process = subprocess.Popen([sys.executable, "scripts/chatbot.py"], cwd=REPO_DIR)
 
         def cleanup():
             if backend_process.poll() is None:
@@ -57,7 +57,7 @@ def main():
             sys.exit(1)
 
     print("Launching chatbot popup...")
-    subprocess.run([sys.executable, "chatbot_ui.py"], cwd=REPO_DIR)
+    subprocess.run([sys.executable, "scripts/chatbot_ui.py"], cwd=REPO_DIR)
 
 
 if __name__ == "__main__":

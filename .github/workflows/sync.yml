@@ -24,7 +24,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install requests python-dotenv spacy click
-          python -m spacy download en_core_web_sm
 
       - name: Run Automation Script
         env:
@@ -33,7 +32,7 @@ jobs:
           NOTION_LAB_DB_ID: ${{ secrets.NOTION_LAB_DB_ID }}
           NOTION_RESEARCH_DB_ID: ${{ secrets.NOTION_RESEARCH_DB_ID }}
           OBSIDIAN_BASE_DIR: "."
-        run: python automation.py
+        run: python scripts/automation.py
 
       - name: Commit and Push New Notes to Repo
         run: |

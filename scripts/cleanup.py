@@ -27,7 +27,7 @@ from automation import (
 
 load_dotenv()
 
-REPO_DIR = Path(__file__).resolve().parent
+REPO_DIR = Path(__file__).resolve().parent.parent
 VAULT_DIR = os.environ.get("OBSIDIAN_BASE_DIR")
 
 PIPELINES = [
