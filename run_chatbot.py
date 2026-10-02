@@ -2,16 +2,21 @@
 """One-command launcher: starts the RAG backend, waits for it to be ready,
 then opens the popup UI. Closing the popup stops the backend too."""
 import atexit
+import os
 import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 REPO_DIR = Path(__file__).resolve().parent
 BACKEND_HOST = "127.0.0.1"
 BACKEND_PORT = 8000
-STARTUP_TIMEOUT_SECONDS = 120
+STARTUP_TIMEOUT_SECONDS = 180
+
+load_dotenv(REPO_DIR / ".env")
 
 
 def is_backend_up():
@@ -35,12 +40,46 @@ def wait_for_backend(process):
     return False
 
 
+def choose_index_folders():
+    """Ask which top-level vault folders to index. Empty/Enter = everything."""
+    vault_dir = os.environ.get("OBSIDIAN_BASE_DIR")
+    if not vault_dir or not os.path.isdir(vault_dir):
+        print("OBSIDIAN_BASE_DIR not set or missing, will index the whole vault.")
+        return ""
+
+    skip = {"scripts", ".git", ".obsidian", ".github", ".vscode", ".claude"}
+    candidates = sorted(
+        p.name for p in Path(vault_dir).iterdir()
+        if p.is_dir() and p.name not in skip and not p.name.startswith(".")
+    )
+    if not candidates:
+        return ""
+
+    print("\nWhich notes should the chatbot index?")
+    for i, name in enumerate(candidates, 1):
+        print(f"  {i}. {name}")
+    raw = input("Enter numbers separated by commas, or press Enter for everything: ").strip()
+    if not raw:
+        return ""
+
+    try:
+        picked = {int(x) for x in raw.split(",")}
+    except ValueError:
+        print("Could not parse that, indexing everything instead.")
+        return ""
+
+    chosen = [candidates[i - 1] for i in sorted(picked) if 1 <= i <= len(candidates)]
+    return ",".join(chosen)
+
+
 def main():
     backend_process = None
     if is_backend_up():
         print("Backend already running on port 8000, reusing it.")
     else:
-        backend_process = subprocess.Popen([sys.executable, "scripts/chatbot.py"], cwd=REPO_DIR)
+        env = os.environ.copy()
+        env["CHATBOT_INDEX_FOLDERS"] = choose_index_folders()
+        backend_process = subprocess.Popen([sys.executable, "scripts/chatbot.py"], cwd=REPO_DIR, env=env)
 
         def cleanup():
             if backend_process.poll() is None:
