@@ -8,5 +8,5 @@ type: personal_task
 
 # Voice toolkit
 
-## Lab Notes
+## Notes
 - 

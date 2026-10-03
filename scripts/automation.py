@@ -121,8 +121,8 @@ type: personal_task
 
 # {title}
 
-## Lab Notes
-- 
+## Notes
+-
 """
     return title, content, target_folder
 
