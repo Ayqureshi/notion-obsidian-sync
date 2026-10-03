@@ -16,4 +16,6 @@ type: phd_research
 	- manually draw them
 	- data viewer to look like text when it is a picture
 	- 
-- 
+- Save automatically
+- Run terminal automatically 
+- If it gets eye tracking dotards
