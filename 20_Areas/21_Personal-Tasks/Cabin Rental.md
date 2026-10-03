@@ -8,5 +8,5 @@ type: personal_task
 
 # Cabin Rental
 
-## Lab Notes
+## Notes
 - 
