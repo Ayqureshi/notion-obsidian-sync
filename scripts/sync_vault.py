@@ -40,11 +40,24 @@ def mirror_to_vault():
     if not VAULT_DIR or not os.path.isdir(VAULT_DIR):
         print(f"OBSIDIAN_BASE_DIR ({VAULT_DIR!r}) not set or missing, skipping vault mirror.")
         return
-    cmd = ["rsync", "-avc", "--update"]
+    # No -c/--checksum: that forces rsync to mmap and read every file's full
+    # content to compare, which is exactly what triggers "Resource deadlock
+    # avoided" against iCloud-synced files (same root cause as the git
+    # status/add hangs we hit earlier). Plain size+mtime comparison is lighter
+    # and --update already protects vault edits regardless.
+    cmd = ["rsync", "-av", "--update"]
     for pattern in RSYNC_EXCLUDES:
         cmd += ["--exclude", pattern]
     cmd += [f"{REPO_DIR}/", f"{VAULT_DIR}/"]
-    run(cmd, check=True)
+    # Not check=True: a transient iCloud contention error here shouldn't
+    # crash the whole sync with a raw traceback -- the git push above
+    # already succeeded, so GitHub is backed up regardless. Just report it
+    # and let the Shortcut continue; the next run will pick up anything
+    # that was missed.
+    result = run(cmd)
+    if result.returncode != 0:
+        print(f"Vault mirror failed (exit {result.returncode}), likely transient iCloud "
+              "contention. GitHub is already up to date; this will retry next sync.")
 
 
 def main():
